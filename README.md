@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EV Route Web
+
+A modern web application for electric vehicle route planning with charging station optimization.
+
+## Tech Stack
+
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui
+- **Maps**: Leaflet / React-Leaflet
+- **API**: Axios
+- **Backend**: n8n webhooks (shared with mobile app)
+
+## Features
+
+- 🔐 User authentication (login/signup)
+- 🗺️ Interactive route planning with map
+- ⚡ EV charging station integration
+- 🔋 Battery level management
+- 📍 Real-time location services
+- 🚗 Vehicle management
+- 📱 Responsive design
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+
+### Installation
 
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create a `.env.local` file:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+NEXT_PUBLIC_API_BASE_URL=https://abhijeetshelke.app.n8n.cloud
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
+```
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+ev-route-web/
+├── app/                    # Next.js app router pages
+│   ├── auth/              # Authentication pages
+│   ├── dashboard/         # Main dashboard
+│   └── api/               # API routes
+├── components/            # React components
+│   ├── auth/             # Auth components
+│   ├── dashboard/        # Dashboard components
+│   └── map/              # Map components
+├── lib/                   # Utilities and helpers
+│   ├── api/              # API client
+│   ├── hooks/            # Custom hooks
+│   ├── types/            # TypeScript types
+│   └── utils/            # Utility functions
+└── public/               # Static assets
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Endpoints
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Using the same n8n backend as the mobile app:
 
-## Deploy on Vercel
+- `/auth/login` - User authentication
+- `/auth/signup` - User registration
+- `/route/plan` - Route planning with charging stations
+- `/stations/nearby` - Get nearby charging stations
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Development in Cursor
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is optimized for development in Cursor IDE with:
+
+- TypeScript for better autocomplete
+- Tailwind CSS for inline style suggestions
+- shadcn/ui components for rapid UI development
+- Structured folders for easy navigation
+
+## Related Projects
+
+- [EVRouteSwiftUI](https://github.com/drshelkeabhijeet/EVRouteSwiftUI) - iOS mobile app
+
+## License
+
+MIT
