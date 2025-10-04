@@ -186,7 +186,9 @@ export default function StationsPage() {
           available: station.availability || 0
         }],
         amenities: [], // n8n response doesn't include amenities
-        distance: station.distance_km || 0
+        distance: station.distance_km || 0,
+        is_selected: station.is_selected || false,
+        isSelected: station.is_selected || false
       }))
 
       setStations(transformedStations)
@@ -240,6 +242,10 @@ export default function StationsPage() {
           zoom={13}
           stations={stations}
           className="h-full w-full"
+          onStationClick={(station) => {
+            console.log('Station clicked:', station)
+            toast.info(`Selected: ${station.name}`)
+          }}
         />
       </div>
 
@@ -307,113 +313,6 @@ export default function StationsPage() {
               </CardContent>
             </Card>
 
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={async () => {
-                    setSearchLocation('Current Location')
-                    setLoading(true)
-                    try {
-                      console.log('Near Me search at:', userLocation[0], userLocation[1], 'radius:', radius[0])
-                      
-                      const response = await stationsAPI.getNearbyStations(
-                        userLocation[0], 
-                        userLocation[1], 
-                        radius[0]
-                      )
-                      
-                      console.log('Near Me API Response:', response)
-                      
-                      // Handle the actual n8n response format
-                      let stationsData = []
-                      if (response.stations) {
-                        stationsData = response.stations
-                      } else if (response.data && response.data.stations) {
-                        stationsData = response.data.stations
-                      } else if (Array.isArray(response)) {
-                        stationsData = response
-                      } else {
-                        console.warn('Unexpected response format:', response)
-                        throw new Error('Invalid response format from API')
-                      }
-                      
-                      const transformedStations: ChargingStation[] = stationsData.map((station: any) => ({
-                        id: station.place_id || station.id || `station-${Math.random()}`,
-                        name: station.station_name || station.name || 'Unknown Station',
-                        location: {
-                          lat: station.location?.latitude || station.latitude || 0,
-                          lng: station.location?.longitude || station.longitude || 0
-                        },
-                        address: station.address || 'Address not available',
-                        chargers: [{
-                          type: station.connector_types?.[0] || 'Unknown',
-                          power: station.charging_speed_kw || 0,
-                          count: station.connector_types?.length || 1,
-                          available: station.availability || 0
-                        }],
-                        amenities: [], // n8n response doesn't include amenities
-                        distance: station.distance_km || 0
-                      }))
-
-                      setStations(transformedStations)
-                      toast.success(`Found ${transformedStations.length} charging stations near you`)
-                    } catch (error: any) {
-                      console.error('Error fetching nearby stations:', error)
-                      
-                      // Show specific error messages
-                      if (error.response?.status === 500) {
-                        toast.error('Server error (500): The n8n workflow may have an issue.')
-                      } else if (error.response?.status === 404) {
-                        toast.error('Webhook not found (404): Check the webhook URL.')
-                      } else if (error.response?.status === 400) {
-                        toast.error('Bad request (400): Check the request parameters.')
-                      } else {
-                        toast.error(`Failed to find nearby stations: ${error.message || 'Unknown error'}`)
-                      }
-                      
-                      setStations(mockStations)
-                    } finally {
-                      setLoading(false)
-                    }
-                  }}
-                  disabled={loading}
-                >
-                  <MapPin className="w-4 h-4 mr-2" />
-                  {loading ? 'Searching...' : 'Near Me'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => toast.info('Feature coming soon')}
-                >
-                  <Battery className="w-4 h-4 mr-2" />
-                  Fast Charging Only
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-orange-600 hover:text-orange-700"
-                  onClick={async () => {
-                    try {
-                      console.log('Testing n8n webhook...')
-                      const response = await stationsAPI.testWebhook()
-                      console.log('Test successful:', response)
-                      toast.success('Webhook test successful! Check console for details.')
-                    } catch (error) {
-                      console.error('Webhook test failed:', error)
-                      toast.error('Webhook test failed. Check console for details.')
-                    }
-                  }}
-                >
-                  🔧 Test Webhook
-                </Button>
-              </CardContent>
-            </Card>
 
             {/* Results */}
             {stations.length > 0 && (
@@ -434,12 +333,23 @@ export default function StationsPage() {
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {stations.map((station) => {
                     const status = getStationStatus(station)
+                    const isBestStation = station.is_selected || station.isSelected
                     return (
-                      <Card key={station.id} className="bg-white/90 backdrop-blur-sm">
+                      <Card 
+                        key={station.id} 
+                        className={`bg-white/90 backdrop-blur-sm ${isBestStation ? 'ring-2 ring-orange-500 border-orange-200' : ''}`}
+                      >
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <CardTitle className="text-base">{station.name}</CardTitle>
+                              <div className="flex items-center gap-2">
+                                <CardTitle className="text-base">{station.name}</CardTitle>
+                                {isBestStation && (
+                                  <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full">
+                                    Recommended
+                                  </span>
+                                )}
+                              </div>
                               <CardDescription className="flex items-center mt-1 text-xs">
                                 <MapPin className="w-3 h-3 mr-1" />
                                 {station.address}

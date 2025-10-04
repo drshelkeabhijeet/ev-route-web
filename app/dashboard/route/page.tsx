@@ -61,23 +61,35 @@ export default function RoutePlanningPage() {
       'Richmond, CA',
       'Concord, CA',
       'Current Location',
-      'Airport',
-      'Downtown',
+      'San Francisco Airport (SFO)',
+      'Oakland Airport (OAK)',
+      'San Jose Airport (SJC)',
+      'Downtown San Francisco',
+      'Downtown San Jose',
+      'Downtown Oakland',
+      'Union Square, San Francisco',
+      'Fisherman\'s Wharf, San Francisco',
+      'Golden Gate Park, San Francisco',
+      'Stanford University, Palo Alto',
+      'UC Berkeley, Berkeley',
       'Shopping Center',
       'Restaurant',
-      'Hotel'
+      'Hotel',
+      'Gas Station',
+      'Charging Station'
     ]
     
     return commonLocations.filter(location => 
       location.toLowerCase().includes(query.toLowerCase())
-    ).slice(0, 5)
+    ).slice(0, 6)
   }
 
   const handleOriginChange = (value: string) => {
     setOrigin(value)
     if (value.length >= 2) {
-      setOriginSuggestions(getSuggestions(value))
-      setShowOriginSuggestions(true)
+      const suggestions = getSuggestions(value)
+      setOriginSuggestions(suggestions)
+      setShowOriginSuggestions(suggestions.length > 0)
     } else {
       setShowOriginSuggestions(false)
     }
@@ -86,8 +98,9 @@ export default function RoutePlanningPage() {
   const handleDestinationChange = (value: string) => {
     setDestination(value)
     if (value.length >= 2) {
-      setDestinationSuggestions(getSuggestions(value))
-      setShowDestinationSuggestions(true)
+      const suggestions = getSuggestions(value)
+      setDestinationSuggestions(suggestions)
+      setShowDestinationSuggestions(suggestions.length > 0)
     } else {
       setShowDestinationSuggestions(false)
     }
