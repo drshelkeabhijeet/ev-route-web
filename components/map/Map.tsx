@@ -6,12 +6,34 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ChargingStation } from '@/lib/types'
 
-// Fix for default markers in Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
-  iconUrl: '/leaflet/marker-icon.png',
-  shadowUrl: '/leaflet/marker-shadow.png',
+// Fix for default markers in Next.js - use custom SVG icons
+const defaultIcon = L.divIcon({
+  html: `
+    <div style="
+      background-color: #3388ff;
+      width: 25px;
+      height: 41px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    ">
+      <div style="
+        transform: rotate(45deg);
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+      ">📍</div>
+    </div>
+  `,
+  className: 'custom-div-icon',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
 })
 
 interface MapProps {
@@ -67,7 +89,7 @@ export default function Map({
       />
 
       {/* Current location marker */}
-      <Marker position={center}>
+      <Marker position={center} icon={defaultIcon}>
         <Popup>
           <div className="text-sm">
             <p className="font-semibold">Your Location</p>

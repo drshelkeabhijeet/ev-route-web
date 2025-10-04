@@ -24,6 +24,10 @@ export default function RoutePlanningPage() {
   const [loading, setLoading] = useState(false)
   const [userLocation, setUserLocation] = useState<[number, number]>([37.7749, -122.4194])
   const [route, setRoute] = useState(null)
+  const [originSuggestions, setOriginSuggestions] = useState<string[]>([])
+  const [destinationSuggestions, setDestinationSuggestions] = useState<string[]>([])
+  const [showOriginSuggestions, setShowOriginSuggestions] = useState(false)
+  const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false)
 
   // Get user's current location
   useEffect(() => {
@@ -40,6 +44,54 @@ export default function RoutePlanningPage() {
       )
     }
   }, [])
+
+  // Mock autocomplete suggestions
+  const getSuggestions = (query: string) => {
+    if (query.length < 2) return []
+    
+    const commonLocations = [
+      'San Francisco, CA',
+      'San Jose, CA',
+      'Oakland, CA',
+      'Berkeley, CA',
+      'Palo Alto, CA',
+      'Mountain View, CA',
+      'Fremont, CA',
+      'Hayward, CA',
+      'Richmond, CA',
+      'Concord, CA',
+      'Current Location',
+      'Airport',
+      'Downtown',
+      'Shopping Center',
+      'Restaurant',
+      'Hotel'
+    ]
+    
+    return commonLocations.filter(location => 
+      location.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 5)
+  }
+
+  const handleOriginChange = (value: string) => {
+    setOrigin(value)
+    if (value.length >= 2) {
+      setOriginSuggestions(getSuggestions(value))
+      setShowOriginSuggestions(true)
+    } else {
+      setShowOriginSuggestions(false)
+    }
+  }
+
+  const handleDestinationChange = (value: string) => {
+    setDestination(value)
+    if (value.length >= 2) {
+      setDestinationSuggestions(getSuggestions(value))
+      setShowDestinationSuggestions(true)
+    } else {
+      setShowDestinationSuggestions(false)
+    }
+  }
 
   const handlePlanRoute = async () => {
     if (!origin || !destination) {
@@ -93,30 +145,66 @@ export default function RoutePlanningPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="origin">From</Label>
+                <Label htmlFor="origin">Origin</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                   <Input
                     id="origin"
                     placeholder="Enter origin or use current location"
                     value={origin}
-                    onChange={(e) => setOrigin(e.target.value)}
+                    onChange={(e) => handleOriginChange(e.target.value)}
+                    onFocus={() => origin.length >= 2 && setShowOriginSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowOriginSuggestions(false), 200)}
                     className="pl-10"
                   />
+                  {showOriginSuggestions && originSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+                      {originSuggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          className="w-full px-3 py-2 text-left hover:bg-gray-100 first:rounded-t-md last:rounded-b-md"
+                          onClick={() => {
+                            setOrigin(suggestion)
+                            setShowOriginSuggestions(false)
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="destination">To</Label>
+                <Label htmlFor="destination">Destination</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                   <Input
                     id="destination"
                     placeholder="Enter destination"
                     value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
+                    onChange={(e) => handleDestinationChange(e.target.value)}
+                    onFocus={() => destination.length >= 2 && setShowDestinationSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowDestinationSuggestions(false), 200)}
                     className="pl-10"
                   />
+                  {showDestinationSuggestions && destinationSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+                      {destinationSuggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          className="w-full px-3 py-2 text-left hover:bg-gray-100 first:rounded-t-md last:rounded-b-md"
+                          onClick={() => {
+                            setDestination(suggestion)
+                            setShowDestinationSuggestions(false)
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
