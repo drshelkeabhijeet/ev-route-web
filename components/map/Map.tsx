@@ -1,173 +1,338 @@
 'use client'
 
-import { useEffect } from 'react'
-import L from 'leaflet'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import 'leaflet/dist/leaflet.css'
+import { useEffect, useRef, useState } from 'react'
+import { Wrapper, Status } from '@googlemaps/react-wrapper'
 import { ChargingStation } from '@/lib/types'
 
-// Fix for default markers in Next.js - use custom SVG icons
-const defaultIcon = L.divIcon({
-  html: `
-    <div style="
-      background-color: #3388ff;
-      width: 25px;
-      height: 41px;
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      border: 2px solid #ffffff;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    ">
-      <div style="
-        transform: rotate(45deg);
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 12px;
-        font-weight: bold;
-      ">📍</div>
-    </div>
-  `,
-  className: 'custom-div-icon',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-})
+// Simple polyline decoder function
+function decodePolyline(encoded: string): google.maps.LatLng[] {
+  const poly = []
+  let index = 0
+  const len = encoded.length
+  let lat = 0
+  let lng = 0
+
+  while (index < len) {
+    let b: number
+    let shift = 0
+    let result = 0
+    do {
+      b = encoded.charCodeAt(index++) - 63
+      result |= (b & 0x1f) << shift
+      shift += 5
+    } while (b >= 0x20)
+    const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1))
+    lat += dlat
+
+    shift = 0
+    result = 0
+    do {
+      b = encoded.charCodeAt(index++) - 63
+      result |= (b & 0x1f) << shift
+      shift += 5
+    } while (b >= 0x20)
+    const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1))
+    lng += dlng
+
+    poly.push(new google.maps.LatLng(lat / 1e5, lng / 1e5))
+  }
+  return poly
+}
 
 interface MapProps {
   center?: [number, number]
   zoom?: number
   className?: string
   stations?: ChargingStation[]
-  route?: any
+  route?: {
+    polyline?: string
+    distance_km?: number
+    duration_minutes?: number
+    origin?: string
+    destination?: string
+  }
   onStationClick?: (station: ChargingStation) => void
 }
 
-function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }) {
-  const map = useMap()
-  useEffect(() => {
-    map.setView(center, zoom)
-  }, [center, zoom, map])
-  return null
-}
-
-export default function Map({
-  center = [37.7749, -122.4194], // Default to San Francisco
+// Google Maps component
+function GoogleMapComponent({
+  center = [37.7749, -122.4194],
   zoom = 13,
   className = 'h-[600px] w-full rounded-lg',
   stations = [],
+  route,
   onStationClick
 }: MapProps) {
-  // Create custom icon for charging stations
-  const chargingIcon = L.divIcon({
-    html: `
-      <div class="relative">
-        <div class="absolute -top-8 -left-4">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" fill="#10b981" stroke="#fff" stroke-width="2"/>
-            <path d="M13 7L9 12H12L11 17L15 12H12L13 7Z" fill="white"/>
-          </svg>
-        </div>
-      </div>
-    `,
-    className: 'custom-div-icon',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-  })
+  const mapRef = useRef<HTMLDivElement>(null)
+  const [map, setMap] = useState<google.maps.Map | null>(null)
+  const [markers, setMarkers] = useState<google.maps.Marker[]>([])
+  const [polyline, setPolyline] = useState<google.maps.Polyline | null>(null)
 
-  // Create orange icon for best/recommended stations
-  const bestStationIcon = L.divIcon({
-    html: `
-      <div class="relative">
-        <div class="absolute -top-8 -left-4">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="10" fill="#f97316" stroke="#fff" stroke-width="2"/>
-            <path d="M13 7L9 12H12L11 17L15 12H12L13 7Z" fill="white"/>
-          </svg>
+  // Initialize map
+  useEffect(() => {
+    if (mapRef.current && !map) {
+      const newMap = new google.maps.Map(mapRef.current, {
+        center: { lat: center[0], lng: center[1] },
+        zoom: zoom,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        styles: [
+          {
+            featureType: 'poi',
+            elementType: 'labels',
+            stylers: [{ visibility: 'off' }]
+          }
+        ]
+      })
+      setMap(newMap)
+    }
+  }, [mapRef, map, center, zoom])
+
+  // Update markers when stations change
+  useEffect(() => {
+    if (!map) return
+
+    // Clear existing markers
+    markers.forEach(marker => marker.setMap(null))
+    const newMarkers: google.maps.Marker[] = []
+
+    // Add station markers
+    stations.forEach((station) => {
+      const isBestStation = station.is_selected || station.isSelected
+      
+      const marker = new google.maps.Marker({
+        position: { lat: station.location.lat, lng: station.location.lng },
+        map: map,
+        icon: {
+          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" fill="${isBestStation ? '#f97316' : '#10b981'}" stroke="#fff" stroke-width="2"/>
+              <path d="M13 7L9 12H12L11 17L15 12H12L13 7Z" fill="white"/>
+            </svg>
+          `)}`,
+          scaledSize: new google.maps.Size(32, 32),
+          anchor: new google.maps.Point(16, 16)
+        },
+        title: station.name
+      })
+
+      // Create info window
+      const infoWindow = new google.maps.InfoWindow({
+        content: `
+          <div style="min-width: 200px; font-family: system-ui;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #1f2937;">${station.name}</h3>
+              ${isBestStation ? '<span style="background: #fed7aa; color: #9a3412; font-size: 10px; padding: 2px 6px; border-radius: 12px;">Recommended</span>' : ''}
+            </div>
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7280;">${station.address}</p>
+            <div style="margin-bottom: 8px;">
+              ${station.chargers.map((charger: any) => `
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span>${charger.type}</span>
+                  <span style="color: #6b7280;">${charger.power}kW (${charger.available}/${charger.count})</span>
+                </div>
+              `).join('')}
+            </div>
+            <button onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${station.location.lat},${station.location.lng}', '_blank')" 
+                    style="width: 100%; background: #059669; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+              Navigate
+            </button>
+          </div>
+        `
+      })
+
+      // Add click listener
+      marker.addListener('click', () => {
+        infoWindow.open(map, marker)
+        if (onStationClick) {
+          onStationClick(station)
+        }
+      })
+
+      newMarkers.push(marker)
+    })
+
+    setMarkers(newMarkers)
+
+    // Cleanup function
+    return () => {
+      newMarkers.forEach(marker => marker.setMap(null))
+    }
+  }, [map, stations, onStationClick])
+
+  // Update polyline when route changes
+  useEffect(() => {
+    if (!map || !route?.polyline) return
+
+    // Clear existing polyline
+    if (polyline) {
+      polyline.setMap(null)
+    }
+
+    // Decode and create new polyline
+    const decodedPath = decodePolyline(route.polyline)
+    
+    const newPolyline = new google.maps.Polyline({
+      path: decodedPath,
+      geodesic: true,
+      strokeColor: '#3b82f6',
+      strokeOpacity: 0.8,
+      strokeWeight: 4,
+      icons: [{
+        icon: {
+          path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+          strokeColor: '#3b82f6',
+          fillColor: '#3b82f6',
+          fillOpacity: 0.8,
+          scale: 3
+        },
+        offset: '50%',
+        repeat: '200px'
+      }]
+    })
+
+    newPolyline.setMap(map)
+    setPolyline(newPolyline)
+
+    // Fit map to route bounds
+    if (decodedPath.length > 0) {
+      const bounds = new google.maps.LatLngBounds()
+      decodedPath.forEach(point => bounds.extend(point))
+      map.fitBounds(bounds)
+      
+      // Add some padding
+      const listener = google.maps.event.addListener(map, 'bounds_changed', () => {
+        const currentBounds = map.getBounds()
+        if (currentBounds) {
+          const ne = currentBounds.getNorthEast()
+          const sw = currentBounds.getSouthWest()
+          const latSpan = ne.lat() - sw.lat()
+          const lngSpan = ne.lng() - sw.lng()
+          
+          const newBounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(sw.lat() - latSpan * 0.1, sw.lng() - lngSpan * 0.1),
+            new google.maps.LatLng(ne.lat() + latSpan * 0.1, ne.lng() + lngSpan * 0.1)
+          )
+          map.fitBounds(newBounds)
+          google.maps.event.removeListener(listener)
+        }
+      })
+    }
+
+    // Cleanup function
+    return () => {
+      if (newPolyline) {
+        newPolyline.setMap(null)
+      }
+    }
+  }, [map, route?.polyline])
+
+  // Add origin and destination markers
+  useEffect(() => {
+    if (!map || !route) return
+
+    const routeMarkers: google.maps.Marker[] = []
+
+    // Origin marker
+    if (route.origin) {
+      const originCoords = route.origin.split(',').map(Number)
+      const originMarker = new google.maps.Marker({
+        position: { lat: originCoords[0], lng: originCoords[1] },
+        map: map,
+        icon: {
+          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="10" cy="10" r="8" fill="#10b981" stroke="#fff" stroke-width="3"/>
+              <text x="10" y="14" text-anchor="middle" fill="white" font-size="10" font-weight="bold">S</text>
+            </svg>
+          `)}`,
+          scaledSize: new google.maps.Size(20, 20),
+          anchor: new google.maps.Point(10, 10)
+        },
+        title: 'Start'
+      })
+      routeMarkers.push(originMarker)
+    }
+
+    // Destination marker
+    if (route.destination) {
+      const destCoords = route.destination.split(',').map(Number)
+      const destMarker = new google.maps.Marker({
+        position: { lat: destCoords[0], lng: destCoords[1] },
+        map: map,
+        icon: {
+          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="10" cy="10" r="8" fill="#ef4444" stroke="#fff" stroke-width="3"/>
+              <text x="10" y="14" text-anchor="middle" fill="white" font-size="10" font-weight="bold">E</text>
+            </svg>
+          `)}`,
+          scaledSize: new google.maps.Size(20, 20),
+          anchor: new google.maps.Point(10, 10)
+        },
+        title: 'End'
+      })
+      routeMarkers.push(destMarker)
+    }
+
+    // Clean up markers on unmount
+    return () => {
+      routeMarkers.forEach(marker => marker.setMap(null))
+    }
+  }, [map, route?.origin, route?.destination])
+
+  return <div ref={mapRef} className={className} />
+}
+
+// Loading component
+const LoadingComponent = () => (
+  <div className="h-[600px] w-full rounded-lg bg-gray-100 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+      <p className="text-gray-600">Loading map...</p>
+    </div>
+  </div>
+)
+
+// Error component
+const ErrorComponent = () => (
+  <div className="h-[600px] w-full rounded-lg bg-red-50 flex items-center justify-center">
+    <div className="text-center">
+      <p className="text-red-600">Error loading map. Please check your API key.</p>
+    </div>
+  </div>
+)
+
+// Main Map component with Google Maps wrapper
+export default function Map(props: MapProps) {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+  if (!apiKey || apiKey === 'your_google_maps_api_key_here') {
+    return (
+      <div className="h-[600px] w-full rounded-lg bg-yellow-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-yellow-800 mb-2">Google Maps API key not configured</p>
+          <p className="text-sm text-yellow-600">Please add your API key to .env.local</p>
         </div>
       </div>
-    `,
-    className: 'custom-div-icon',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-  })
+    )
+  }
 
   return (
-    <MapContainer
-      center={center}
-      zoom={zoom}
-      className={className}
-      style={{ zIndex: 0 }}
-    >
-      <ChangeView center={center} zoom={zoom} />
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-
-      {/* Current location marker */}
-      <Marker position={center} icon={defaultIcon}>
-        <Popup>
-          <div className="text-sm">
-            <p className="font-semibold">Your Location</p>
-          </div>
-        </Popup>
-      </Marker>
-
-      {/* Charging station markers */}
-      {stations.map((station) => {
-        const isBestStation = station.is_selected || station.isSelected
-        return (
-          <Marker
-            key={station.id}
-            position={[station.location.lat, station.location.lng]}
-            icon={isBestStation ? bestStationIcon : chargingIcon}
-            eventHandlers={{
-              click: () => {
-                if (onStationClick) {
-                  onStationClick(station)
-                }
-              }
-            }}
-          >
-            <Popup>
-              <div className="text-sm space-y-2 min-w-[200px]">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold">{station.name}</p>
-                  {isBestStation && (
-                    <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full">
-                      Recommended
-                    </span>
-                  )}
-                </div>
-                <p className="text-gray-600 text-xs">{station.address}</p>
-                <div className="pt-2 space-y-1">
-                  {station.chargers.map((charger, idx) => (
-                    <div key={idx} className="text-xs flex justify-between">
-                      <span>{charger.type}</span>
-                      <span className="text-gray-600">{charger.power}kW ({charger.available}/{charger.count})</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="pt-2 border-t">
-                  <button
-                    onClick={() => {
-                      const { lat, lng } = station.location
-                      const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
-                      window.open(url, '_blank')
-                    }}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded"
-                  >
-                    Navigate
-                  </button>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        )
-      })}
-    </MapContainer>
+    <Wrapper
+      apiKey={apiKey}
+      render={render}
+      libraries={['places']}
+    />
   )
+
+  function render(status: Status) {
+    switch (status) {
+      case Status.LOADING:
+        return <LoadingComponent />
+      case Status.FAILURE:
+        return <ErrorComponent />
+      case Status.SUCCESS:
+        return <GoogleMapComponent {...props} />
+    }
+  }
 }

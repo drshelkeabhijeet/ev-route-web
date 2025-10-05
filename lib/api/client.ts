@@ -43,24 +43,58 @@ export const authAPI = {
 
 // Route API
 export const routeAPI = {
-  planRoute: async (data: {
-    origin: { lat: number; lng: number }
-    destination: { lat: number; lng: number }
-    vehicleId: string
-    currentBattery: number
-  }): Promise<RouteResponse> => {
-    const response = await apiClient.post('/webhook/route/plan', data)
-    return response.data
-  },
-
-  getNearbyStations: async (lat: number, lng: number, radius: number = 50) => {
-    const response = await apiClient.post('/webhook/545c8277-554b-460d-89c5-5785fb99c782', {
-      latitude: lat,        // n8n expects 'latitude'
-      longitude: lng,       // n8n expects 'longitude' 
-      radius_km: radius     // n8n expects 'radius_km'
-    })
-    return response.data
-  },
+  planRoute: async (
+    originCoords: string, 
+    destinationCoords: string, 
+    batteryLevel: number = 80,
+    batteryCapacity: number = 75,
+    minSOC: number = 20,
+    targetSOC: number = 80,
+    amenityPreferences: string[] = []
+  ) => {
+    try {
+      console.log('Planning route with n8n webhook:', { 
+        originCoords, 
+        destinationCoords, 
+        batteryLevel, 
+        batteryCapacity, 
+        minSOC, 
+        targetSOC, 
+        amenityPreferences 
+      })
+      
+      // Prepare request data in the exact format n8n expects
+      const requestData = {
+        origin: originCoords, // "latitude,longitude" format
+        destination: destinationCoords, // "latitude,longitude" format
+        current_soc: batteryLevel,
+        battery_capacity_kwh: batteryCapacity,
+        min_soc: minSOC,
+        target_soc: targetSOC,
+        amenity_preferences: amenityPreferences
+      }
+      
+      console.log('Sending data to n8n webhook:', requestData)
+      
+      const response = await apiClient.post('/webhook/5c5cf1c2-edab-404e-8637-8e3c4a572f9d', requestData)
+      
+      console.log('Route planning response:', response.data)
+      return response.data
+    } catch (error: any) {
+      console.error('Route planning error:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          data: error.config?.data
+        }
+      })
+      throw error
+    }
+  }
 }
 
 // Stations API
