@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Zap } from 'lucide-react'
+import { Zap, Mail, Lock, User } from 'lucide-react'
 
 export default function SignupPage() {
   const [name, setName] = useState('')
@@ -44,87 +44,114 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-      <div className="w-full max-w-md px-4">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-full mb-4">
-            <Zap className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">EV Route</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Start your electric journey today</p>
-        </div>
-
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Create an account</CardTitle>
-            <CardDescription>Enter your details to get started</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                  minLength={6}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                  minLength={6}
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Creating account...' : 'Sign up'}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter>
-            <div className="text-sm text-center w-full text-gray-600 dark:text-gray-400">
-              Already have an account?{' '}
-              <Link href="/login" className="text-green-600 hover:text-green-700 font-medium">
-                Sign in
-              </Link>
+    <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
+      <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto grid w-[380px] gap-6">
+          <div className="grid gap-2 text-center">
+            <div className="flex justify-center items-center gap-2 mb-4">
+              <Zap className="h-8 w-8 text-green-600" />
+              <h1 className="text-3xl font-bold">EV Route</h1>
             </div>
-          </CardFooter>
-        </Card>
+            <p className="text-balance text-muted-foreground">
+              Create your account to start planning your journey
+            </p>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-2xl">Sign Up</CardTitle>
+              <CardDescription>
+                Enter your information to create an account
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="name"
+                      placeholder="John Doe"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      disabled={loading}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                      minLength={6}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                      minLength={6}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={loading}>
+                  {loading ? 'Creating account...' : 'Create account'}
+                </Button>
+              </form>
+            </CardContent>
+            <CardFooter>
+              <div className="text-center text-sm w-full">
+                Already have an account?{" "}
+                <Link href="/login" className="underline text-green-600">
+                  Login
+                </Link>
+              </div>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+      <div className="hidden bg-gray-100 lg:flex items-center justify-center p-12">
+        <img 
+          src="/login-bg.jpg" 
+          alt="Electric car charging" 
+          className="h-full w-full object-cover rounded-3xl shadow-2xl"
+        />
       </div>
     </div>
   )
