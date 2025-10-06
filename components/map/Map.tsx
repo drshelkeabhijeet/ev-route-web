@@ -52,6 +52,9 @@ interface MapProps {
     destination?: string
   }
   onStationClick?: (station: ChargingStation) => void
+  showRadius?: boolean
+  radiusKm?: number
+  selectedStationId?: string
 }
 
 // Google Maps component
@@ -61,12 +64,16 @@ function GoogleMapComponent({
   className = 'h-[600px] w-full rounded-lg',
   stations = [],
   route,
-  onStationClick
+  onStationClick,
+  showRadius = false,
+  radiusKm = 15,
+  selectedStationId
 }: MapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const [markers, setMarkers] = useState<google.maps.Marker[]>([])
   const [polyline, setPolyline] = useState<google.maps.Polyline | null>(null)
+  const [radiusCircle, setRadiusCircle] = useState<google.maps.Circle | null>(null)
 
   // Initialize map
   useEffect(() => {
@@ -75,6 +82,14 @@ function GoogleMapComponent({
         center: { lat: center[0], lng: center[1] },
         zoom: zoom,
         mapTypeId: google.maps.MapTypeId.ROADMAP,
+        clickableIcons: true,
+        gestureHandling: 'greedy',
+        zoomControl: true,
+        mapTypeControl: false,
+        scaleControl: true,
+        streetViewControl: false,
+        rotateControl: false,
+        fullscreenControl: true,
         styles: [
           {
             featureType: 'poi',
@@ -87,6 +102,46 @@ function GoogleMapComponent({
     }
   }, [mapRef, map, center, zoom])
 
+  // Update map center when center prop changes
+  useEffect(() => {
+    if (map && center) {
+      map.setCenter({ lat: center[0], lng: center[1] })
+    }
+  }, [map, center])
+
+  // Update radius circle when showRadius or radiusKm changes
+  useEffect(() => {
+    if (!map) return
+
+    // Clear existing circle
+    if (radiusCircle) {
+      radiusCircle.setMap(null)
+    }
+
+    // Create new circle if showRadius is true
+    if (showRadius && center) {
+      const newCircle = new google.maps.Circle({
+        map: map,
+        center: { lat: center[0], lng: center[1] },
+        radius: radiusKm * 1000, // Convert km to meters
+        strokeColor: '#10b981',
+        strokeOpacity: 0.6,
+        strokeWeight: 2,
+        fillColor: '#10b981',
+        fillOpacity: 0.1,
+        clickable: false
+      })
+      setRadiusCircle(newCircle)
+    }
+
+    // Cleanup function
+    return () => {
+      if (radiusCircle) {
+        radiusCircle.setMap(null)
+      }
+    }
+  }, [map, showRadius, radiusKm, center])
+
   // Update markers when stations change
   useEffect(() => {
     if (!map) return
@@ -97,11 +152,13 @@ function GoogleMapComponent({
 
     // Add station markers
     stations.forEach((station) => {
-      const isBestStation = station.is_selected || station.isSelected
+      const isBestStation = station.is_selected || station.isSelected || station.id === selectedStationId
       
       const marker = new google.maps.Marker({
         position: { lat: station.location.lat, lng: station.location.lng },
         map: map,
+        clickable: true,
+        optimized: false,
         icon: {
           url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -112,37 +169,12 @@ function GoogleMapComponent({
           scaledSize: new google.maps.Size(32, 32),
           anchor: new google.maps.Point(16, 16)
         },
-        title: station.name
+        title: station.name,
+        cursor: 'pointer'
       })
 
-      // Create info window
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="min-width: 200px; font-family: system-ui;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: #1f2937;">${station.name}</h3>
-              ${isBestStation ? '<span style="background: #fed7aa; color: #9a3412; font-size: 10px; padding: 2px 6px; border-radius: 12px;">Recommended</span>' : ''}
-            </div>
-            <p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7280;">${station.address}</p>
-            <div style="margin-bottom: 8px;">
-              ${station.chargers.map((charger: any) => `
-                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                  <span>${charger.type}</span>
-                  <span style="color: #6b7280;">${charger.power}kW (${charger.available}/${charger.count})</span>
-                </div>
-              `).join('')}
-            </div>
-            <button onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${station.location.lat},${station.location.lng}', '_blank')" 
-                    style="width: 100%; background: #059669; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;">
-              Navigate
-            </button>
-          </div>
-        `
-      })
-
-      // Add click listener
+      // Add click listener - only trigger callback, no info window
       marker.addListener('click', () => {
-        infoWindow.open(map, marker)
         if (onStationClick) {
           onStationClick(station)
         }
@@ -157,7 +189,7 @@ function GoogleMapComponent({
     return () => {
       newMarkers.forEach(marker => marker.setMap(null))
     }
-  }, [map, stations, onStationClick])
+  }, [map, stations, onStationClick, selectedStationId])
 
   // Update polyline when route changes
   useEffect(() => {
@@ -312,6 +344,9 @@ export default function Map(props: MapProps) {
         <div className="text-center">
           <p className="text-yellow-800 mb-2">Google Maps API key not configured</p>
           <p className="text-sm text-yellow-600">Please add your API key to .env.local</p>
+          <p className="text-xs text-yellow-500 mt-2">
+            Current API Key: {apiKey ? `${apiKey.substring(0, 10)}...` : 'undefined'}
+          </p>
         </div>
       </div>
     )

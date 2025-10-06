@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/contexts/auth-context'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Car, Map, User, LogOut, Zap, Home } from 'lucide-react'
+import { Car, Map, User, LogOut, Zap, Home, Battery } from 'lucide-react'
 import Link from 'next/link'
 
 export default function DashboardLayout({
@@ -59,6 +59,12 @@ export default function DashboardLayout({
                     Plan Route
                   </Button>
                 </Link>
+                <Link href="/dashboard/stations">
+                  <Button variant="ghost" size="sm" className="flex items-center">
+                    <Battery className="w-4 h-4 mr-2" />
+                    Find Nearby Stations
+                  </Button>
+                </Link>
                 <Link href="/dashboard/vehicles">
                   <Button variant="ghost" size="sm" className="flex items-center">
                     <Car className="w-4 h-4 mr-2" />
@@ -102,6 +108,11 @@ export default function DashboardLayout({
           <Link href="/dashboard/route">
             <Button variant="ghost" size="sm">
               <Map className="w-5 h-5" />
+            </Button>
+          </Link>
+          <Link href="/dashboard/stations">
+            <Button variant="ghost" size="sm">
+              <Battery className="w-5 h-5" />
             </Button>
           </Link>
           <Link href="/dashboard/vehicles">

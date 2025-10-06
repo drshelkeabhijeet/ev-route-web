@@ -45,53 +45,90 @@ export default function RoutePlanningPage() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation([position.coords.latitude, position.coords.longitude])
-          // Don't pre-fill the origin field, just store the location
+          const newLocation: [number, number] = [position.coords.latitude, position.coords.longitude]
+          setUserLocation(newLocation)
+          console.log('User location obtained:', newLocation)
         },
         (error) => {
           console.error('Error getting location:', error)
-          // Silently fail - user can still enter location manually
+          // Set a default location (Mumbai, India) if geolocation fails
+          setUserLocation([19.0760, 72.8777])
+          console.log('Using default location (Mumbai)')
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
         }
       )
+    } else {
+      // Fallback if geolocation is not supported
+      setUserLocation([19.0760, 72.8777])
+      console.log('Geolocation not supported, using default location (Mumbai)')
     }
   }, [])
 
-  // Fetch location suggestions from Google Places API
+  // Fetch location suggestions using OpenStreetMap Nominatim (free, no CORS issues)
   const fetchLocationSuggestions = async (query: string) => {
     if (query.length < 3) return []
     
     try {
       setLoadingSuggestions(true)
       
-      // Use Google Places API Text Search
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?input=${encodeURIComponent(query)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&fields=formatted_address,geometry,name,place_id,types`
-      )
+      console.log('Fetching suggestions for:', query)
       
-      if (!response.ok) return []
+      // Use OpenStreetMap Nominatim API (free, no CORS issues)
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=in`
       
-      const data = await response.json()
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'EV-Route-Web/1.0'
+        }
+      })
       
-      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        console.error('Google Places API error:', data.status, data.error_message)
-        return []
+      if (!response.ok) {
+        console.error('HTTP Error:', response.status, response.statusText)
+        return getMockSuggestions(query)
       }
       
-      return data.results.map((place: any) => ({
-        display_name: place.formatted_address,
-        name: place.name,
-        lat: place.geometry.location.lat,
-        lon: place.geometry.location.lng,
+      const data = await response.json()
+      console.log('Nominatim Response:', data)
+      
+      const results = data.map((place: any) => ({
+        display_name: place.display_name,
+        name: place.name || place.display_name.split(',')[0],
+        lat: parseFloat(place.lat),
+        lon: parseFloat(place.lon),
         place_id: place.place_id,
-        types: place.types,
-        formatted_address: place.formatted_address
+        types: [place.type, place.class],
+        formatted_address: place.display_name
       }))
+      
+      console.log('Processed results:', results.length)
+      return results
     } catch (error) {
       console.error('Error fetching location suggestions:', error)
-      return []
+      return getMockSuggestions(query)
     } finally {
       setLoadingSuggestions(false)
     }
+  }
+
+  // Mock suggestions as fallback
+  const getMockSuggestions = (query: string) => {
+    const mockSuggestions = [
+      { display_name: `${query}, Mumbai, Maharashtra, India`, name: query, lat: 19.0760, lon: 72.8777, place_id: 'mock1', types: ['locality'], formatted_address: `${query}, Mumbai, Maharashtra, India` },
+      { display_name: `${query}, Delhi, India`, name: query, lat: 28.7041, lon: 77.1025, place_id: 'mock2', types: ['locality'], formatted_address: `${query}, Delhi, India` },
+      { display_name: `${query}, Bangalore, Karnataka, India`, name: query, lat: 12.9716, lon: 77.5946, place_id: 'mock3', types: ['locality'], formatted_address: `${query}, Bangalore, Karnataka, India` },
+      { display_name: `${query}, Chennai, Tamil Nadu, India`, name: query, lat: 13.0827, lon: 80.2707, place_id: 'mock4', types: ['locality'], formatted_address: `${query}, Chennai, Tamil Nadu, India` },
+      { display_name: `${query}, Kolkata, West Bengal, India`, name: query, lat: 22.5726, lon: 88.3639, place_id: 'mock5', types: ['locality'], formatted_address: `${query}, Kolkata, West Bengal, India` }
+    ]
+    
+    return mockSuggestions.filter(suggestion => 
+      suggestion.display_name.toLowerCase().includes(query.toLowerCase())
+    )
   }
 
   const handleOriginChange = async (value: string) => {

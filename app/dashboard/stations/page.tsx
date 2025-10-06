@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
-import { Battery, MapPin, Search, Zap, Clock, DollarSign } from 'lucide-react'
+import { Battery, MapPin, Search, Zap, Clock, DollarSign, Navigation } from 'lucide-react'
 import { ChargingStation } from '@/lib/types'
 import { stationsAPI } from '@/lib/api/client'
 import { toast } from 'sonner'
@@ -20,10 +20,15 @@ const Map = dynamic(() => import('@/components/map/Map'), {
 
 export default function StationsPage() {
   const [searchLocation, setSearchLocation] = useState('')
-  const [radius, setRadius] = useState([10])
+  const [radius, setRadius] = useState([15])
   const [userLocation, setUserLocation] = useState<[number, number]>([37.7749, -122.4194])
   const [stations, setStations] = useState<ChargingStation[]>([])
   const [loading, setLoading] = useState(false)
+  const [selectedStation, setSelectedStation] = useState<ChargingStation | null>(null)
+  
+  // Cache for stations data
+  const [cachedStations, setCachedStations] = useState<ChargingStation[]>([])
+  const [hasSearched, setHasSearched] = useState(false)
 
   // Mock charging stations data
   const mockStations: ChargingStation[] = [
@@ -65,85 +70,53 @@ export default function StationsPage() {
     }
   ]
 
-  // Get user's current location and auto-search for nearby stations
+  // Get user's current location only (no auto-search)
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
+        (position) => {
           const newLocation: [number, number] = [position.coords.latitude, position.coords.longitude]
           setUserLocation(newLocation)
-          
-          // Auto-search for nearby stations
-          try {
-            setLoading(true)
-            const response = await stationsAPI.getNearbyStations(
-              newLocation[0], 
-              newLocation[1], 
-              radius[0]
-            )
-            
-            console.log('Auto-search API Response:', response)
-            
-            // Handle the actual n8n response format
-            let stationsData = []
-            if (response.stations) {
-              stationsData = response.stations
-            } else if (response.data && response.data.stations) {
-              stationsData = response.data.stations
-            } else if (Array.isArray(response)) {
-              stationsData = response
-            } else {
-              console.warn('Unexpected response format:', response)
-              throw new Error('Invalid response format from API')
-            }
-            
-            const transformedStations: ChargingStation[] = stationsData.map((station: any) => ({
-              id: station.place_id || station.id || `station-${Math.random()}`,
-              name: station.station_name || station.name || 'Unknown Station',
-              location: {
-                lat: station.location?.latitude || station.latitude || 0,
-                lng: station.location?.longitude || station.longitude || 0
-              },
-              address: station.address || 'Address not available',
-              chargers: [{
-                type: station.connector_types?.[0] || 'Unknown',
-                power: station.charging_speed_kw || 0,
-                count: station.connector_types?.length || 1,
-                available: station.availability || 0
-              }],
-              amenities: [], // n8n response doesn't include amenities
-              distance: station.distance_km || 0
-            }))
-
-            setStations(transformedStations)
-            toast.success(`Found ${transformedStations.length} charging stations near you`)
-          } catch (error: any) {
-            console.error('Error fetching nearby stations:', error)
-            
-            // Log specific error details for debugging
-            if (error.response?.status === 500) {
-              console.error('n8n workflow error (500):', error.response?.data)
-            } else if (error.response?.status === 404) {
-              console.error('Webhook not found (404):', error.response?.data)
-            } else {
-              console.error('Other error:', error.message)
-            }
-            
-            // Don't show error toast on auto-search, just use mock data
-            setStations(mockStations)
-          } finally {
-            setLoading(false)
-          }
+          console.log('User location obtained:', newLocation)
         },
         (error) => {
           console.error('Error getting location:', error)
-          toast.error('Could not get your location')
+          // Set a default location (Mumbai, India) if geolocation fails
+          setUserLocation([19.0760, 72.8777])
+          console.log('Using default location (Mumbai)')
+          toast.error('Could not get your location. Using default location.')
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
         }
       )
+    } else {
+      // Fallback if geolocation is not supported
+      setUserLocation([19.0760, 72.8777])
+      console.log('Geolocation not supported, using default location (Mumbai)')
     }
   }, [])
 
+  // Clear cache when radius changes
+  const handleRadiusChange = (newRadius: number[]) => {
+    setRadius(newRadius)
+    // Clear cache when radius changes
+    setCachedStations([])
+    setHasSearched(false)
+    setStations([])
+  }
+
   const handleSearch = async () => {
+    // Check if we have cached data for this location and radius
+    if (hasSearched && cachedStations.length > 0) {
+      console.log('Using cached stations data')
+      setStations(cachedStations)
+      toast.success(`Showing ${cachedStations.length} cached charging stations`)
+      return
+    }
+
     setLoading(true)
     try {
       console.log('Searching for stations at:', userLocation[0], userLocation[1], 'radius:', radius[0])
@@ -191,6 +164,9 @@ export default function StationsPage() {
         isSelected: station.is_selected || false
       }))
 
+      // Cache the results
+      setCachedStations(transformedStations)
+      setHasSearched(true)
       setStations(transformedStations)
       toast.success(`Found ${transformedStations.length} charging stations`)
     } catch (error: any) {
@@ -239,20 +215,23 @@ export default function StationsPage() {
       <div className="absolute inset-0 z-0">
         <Map
           center={userLocation}
-          zoom={13}
+          zoom={12}
           stations={stations}
           className="h-full w-full"
+          showRadius={true}
+          radiusKm={radius[0]}
+          selectedStationId={selectedStation?.id}
           onStationClick={(station) => {
+            setSelectedStation(station)
             console.log('Station clicked:', station)
-            toast.info(`Selected: ${station.name}`)
           }}
         />
       </div>
 
       {/* Overlay Content */}
-      <div className="relative z-10 h-full flex">
+      <div className="relative z-10 h-full flex pointer-events-none">
         {/* Left Sidebar - Search Panel */}
-        <div className="w-96 bg-white/95 backdrop-blur-sm border-r border-gray-200 overflow-y-auto">
+        <div className="w-96 bg-white/95 backdrop-blur-sm border-r border-gray-200 overflow-y-auto pointer-events-auto">
           <div className="p-6 space-y-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
@@ -296,7 +275,7 @@ export default function StationsPage() {
                   <Slider
                     id="radius"
                     value={radius}
-                    onValueChange={setRadius}
+                    onValueChange={handleRadiusChange}
                     max={50}
                     step={5}
                     className="w-full"
@@ -308,7 +287,7 @@ export default function StationsPage() {
                   disabled={loading}
                   className="w-full bg-green-600 hover:bg-green-700"
                 >
-                  {loading ? 'Searching...' : 'Search Stations'}
+                  {loading ? 'Searching...' : hasSearched && cachedStations.length > 0 ? 'Show Cached Results' : 'Search Stations'}
                 </Button>
               </CardContent>
             </Card>
@@ -431,6 +410,90 @@ export default function StationsPage() {
         {/* Right side - Empty for now, could add more controls */}
         <div className="flex-1"></div>
       </div>
+
+      {/* Station Details Banner (bottom) */}
+      {selectedStation && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-lg pointer-events-auto">
+          <div className="max-w-4xl mx-auto p-6">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="text-xl font-bold text-gray-900">{selectedStation.name}</h2>
+                  {selectedStation.is_selected && (
+                    <span className="bg-orange-100 text-orange-700 text-xs px-2 py-1 rounded-full font-medium">
+                      Recommended
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mb-4 flex items-center">
+                  <MapPin className="w-4 h-4 mr-1" />
+                  {selectedStation.address}
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  {/* Chargers */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Chargers Available</h3>
+                    <div className="space-y-1">
+                      {selectedStation.chargers.map((charger, idx) => (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <span>{charger.type}</span>
+                          <span className="text-gray-600">
+                            {charger.power}kW • {charger.available}/{charger.count} available
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Additional Info */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Additional Info</h3>
+                    {selectedStation.amenities && selectedStation.amenities.length > 0 && (
+                      <div className="text-sm text-gray-600 mb-2">
+                        <strong>Amenities:</strong> {selectedStation.amenities.join(', ')}
+                      </div>
+                    )}
+                    {selectedStation.distance !== undefined && (
+                      <div className="text-sm text-gray-600">
+                        <strong>Distance:</strong> {selectedStation.distance.toFixed(1)} km
+                      </div>
+                    )}
+                    {selectedStation.rating && (
+                      <div className="text-sm text-gray-600">
+                        <strong>Rating:</strong> {selectedStation.rating}/5 ⭐
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 ml-6">
+                <Button 
+                  size="lg"
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    window.open(
+                      `https://www.google.com/maps/dir/?api=1&destination=${selectedStation.location.lat},${selectedStation.location.lng}`,
+                      '_blank'
+                    )
+                  }}
+                >
+                  <Navigation className="w-4 h-4 mr-2" />
+                  Navigate
+                </Button>
+                <Button 
+                  size="lg"
+                  variant="outline"
+                  onClick={() => setSelectedStation(null)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
