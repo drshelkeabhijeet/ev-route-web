@@ -26,9 +26,20 @@ export default function StationsPage() {
   const [loading, setLoading] = useState(false)
   const [selectedStation, setSelectedStation] = useState<ChargingStation | null>(null)
   
-  // Cache for stations data
-  const [cachedStations, setCachedStations] = useState<ChargingStation[]>([])
-  const [hasSearched, setHasSearched] = useState(false)
+  // Cache for stations data - load from localStorage on mount
+  const [cachedStations, setCachedStations] = useState<ChargingStation[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ev-route-cached-stations')
+      return saved ? JSON.parse(saved) : []
+    }
+    return []
+  })
+  const [hasSearched, setHasSearched] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ev-route-has-searched') === 'true'
+    }
+    return false
+  })
 
   // Mock charging stations data
   const mockStations: ChargingStation[] = [
@@ -99,6 +110,14 @@ export default function StationsPage() {
     }
   }, [])
 
+  // Load cached stations on component mount
+  useEffect(() => {
+    if (hasSearched && cachedStations.length > 0) {
+      console.log('Loading cached stations from localStorage')
+      setStations(cachedStations)
+    }
+  }, [hasSearched, cachedStations])
+
   // Clear cache when radius changes
   const handleRadiusChange = (newRadius: number[]) => {
     setRadius(newRadius)
@@ -106,6 +125,11 @@ export default function StationsPage() {
     setCachedStations([])
     setHasSearched(false)
     setStations([])
+    // Clear localStorage cache
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ev-route-cached-stations')
+      localStorage.removeItem('ev-route-has-searched')
+    }
   }
 
   const handleSearch = async () => {
@@ -168,6 +192,13 @@ export default function StationsPage() {
       setCachedStations(transformedStations)
       setHasSearched(true)
       setStations(transformedStations)
+      
+      // Save to localStorage for session persistence
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ev-route-cached-stations', JSON.stringify(transformedStations))
+        localStorage.setItem('ev-route-has-searched', 'true')
+      }
+      
       toast.success(`Found ${transformedStations.length} charging stations`)
     } catch (error: any) {
       console.error('Error fetching stations:', error)

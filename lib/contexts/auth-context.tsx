@@ -71,6 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null)
     authAPI.logout()
+    
+    // Clear all localStorage data including cached stations
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user')
+      localStorage.removeItem('token')
+      localStorage.removeItem('ev-route-cached-stations')
+      localStorage.removeItem('ev-route-has-searched')
+    }
+    
     router.push('/login')
   }
 
