@@ -4,23 +4,25 @@ A modern web application for electric vehicle route planning with charging stati
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 15 (App Router with Turbopack)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui
-- **Maps**: Leaflet / React-Leaflet
-- **API**: Axios
-- **Backend**: n8n webhooks (shared with mobile app)
+- **UI Components**: shadcn/ui (Radix UI)
+- **Maps**: Google Maps JavaScript API
+- **Authentication**: Supabase Auth
+- **API**: n8n webhooks (route planning & charging stations)
+- **Icons**: Lucide React
 
 ## Features
 
-- 🔐 User authentication (login/signup)
-- 🗺️ Interactive route planning with map
-- ⚡ EV charging station integration
-- 🔋 Battery level management
-- 📍 Real-time location services
-- 🚗 Vehicle management
-- 📱 Responsive design
+- 🔐 **Supabase Authentication** - Real user authentication with email/password
+- 🗺️ **Google Maps Integration** - Interactive route planning with map
+- ⚡ **EV Charging Stations** - Find and plan routes with charging stops
+- 🔋 **Battery Management** - Track and optimize battery usage
+- 📍 **Location Services** - Real-time GPS location with autocomplete
+- 🚗 **Vehicle Management** - Manage multiple EV profiles
+- 💾 **Session Caching** - Smart caching for charging station data
+- 📱 **Responsive Design** - Modern, eco-conscious UI
 
 ## Getting Started
 
@@ -47,12 +49,24 @@ npm start
 
 ### Environment Variables
 
-Create a `.env.local` file:
+Create a `.env.local` file in the root directory:
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=https://abhijeetshelke.app.n8n.cloud
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
+# Google Maps API Key
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url_here
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
+
+**Setup Instructions:**
+
+1. **Google Maps API**: See `GOOGLE_MAPS_SETUP.md` for detailed instructions
+2. **Supabase Authentication**: See `SUPABASE_SETUP.md` for detailed instructions
+3. **Restart your dev server** after adding environment variables
+
+⚠️ **Note**: The application requires both Google Maps and Supabase credentials to function properly.
 
 ## Project Structure
 

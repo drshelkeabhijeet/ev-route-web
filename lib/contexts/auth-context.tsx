@@ -31,14 +31,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
+  // Check if Supabase is configured
+  const isSupabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      console.warn('⚠️ Supabase not configured. Authentication will not work until you add credentials to .env.local')
+      setLoading(false)
+      return
+    }
+
     // Get initial session
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        setUser(transformSupabaseUser(session.user))
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          setUser(transformSupabaseUser(session.user))
+        }
+      } catch (error) {
+        console.error('Failed to get session:', error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     getInitialSession()
@@ -61,9 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [isSupabaseConfigured])
 
   const login = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured. Please add your credentials to .env.local file. See SUPABASE_SETUP.md for instructions.')
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -85,6 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signup = async (email: string, password: string, name: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured. Please add your credentials to .env.local file. See SUPABASE_SETUP.md for instructions.')
+    }
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
