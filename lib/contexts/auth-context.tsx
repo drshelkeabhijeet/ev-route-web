@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
-      const { data: { session } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
         setUser(transformSupabaseUser(session.user))
       }
