@@ -2,7 +2,9 @@ export interface User {
   id: string
   email: string
   name: string
-  token?: string
+  avatar?: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Vehicle {

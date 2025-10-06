@@ -2,8 +2,9 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User } from '@/lib/types'
-import { authAPI, mockAPI } from '@/lib/api/client'
+import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null
@@ -15,35 +16,68 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Helper function to transform Supabase user to our User type
+const transformSupabaseUser = (supabaseUser: SupabaseUser): User => ({
+  id: supabaseUser.id,
+  email: supabaseUser.email || '',
+  name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '',
+  avatar: supabaseUser.user_metadata?.avatar_url || '',
+  createdAt: supabaseUser.created_at,
+  updatedAt: supabaseUser.updated_at || supabaseUser.created_at
+})
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    // Check for stored user on mount
-    if (typeof window !== 'undefined') {
-      const storedUser = localStorage.getItem('user')
-      const storedToken = localStorage.getItem('token')
-      if (storedUser && storedToken) {
-        setUser(JSON.parse(storedUser))
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session } = await supabase.auth.getSession()
+      if (session?.user) {
+        setUser(transformSupabaseUser(session.user))
       }
+      setLoading(false)
     }
-    setLoading(false)
+
+    getInitialSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser(transformSupabaseUser(session.user))
+        } else {
+          setUser(null)
+          // Clear all localStorage data including cached stations
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('ev-route-cached-stations')
+            localStorage.removeItem('ev-route-has-searched')
+          }
+        }
+        setLoading(false)
+      }
+    )
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const login = async (email: string, password: string) => {
     try {
-      // Use mockAPI for now, switch to authAPI when backend is ready
-      const response = await mockAPI.login({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-      setUser(response.user)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(response.user))
-        localStorage.setItem('token', response.token)
+      if (error) {
+        throw new Error(error.message)
       }
 
-      router.push('/dashboard')
+      if (data.user) {
+        setUser(transformSupabaseUser(data.user))
+        router.push('/dashboard')
+      }
     } catch (error) {
       console.error('Login failed:', error)
       throw error
@@ -52,35 +86,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = async (email: string, password: string, name: string) => {
     try {
-      // Use mockAPI for now, switch to authAPI when backend is ready
-      const response = await mockAPI.signup({ email, password, name })
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            name: name,
+          }
+        }
+      })
 
-      setUser(response.user)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(response.user))
-        localStorage.setItem('token', response.token)
+      if (error) {
+        throw new Error(error.message)
       }
 
-      router.push('/dashboard')
+      if (data.user) {
+        setUser(transformSupabaseUser(data.user))
+        router.push('/dashboard')
+      }
     } catch (error) {
       console.error('Signup failed:', error)
       throw error
     }
   }
 
-  const logout = () => {
-    setUser(null)
-    authAPI.logout()
-    
-    // Clear all localStorage data including cached stations
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user')
-      localStorage.removeItem('token')
-      localStorage.removeItem('ev-route-cached-stations')
-      localStorage.removeItem('ev-route-has-searched')
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      
+      // Clear all localStorage data including cached stations
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ev-route-cached-stations')
+        localStorage.removeItem('ev-route-has-searched')
+      }
+      
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Still redirect to login even if logout fails
+      router.push('/login')
     }
-    
-    router.push('/login')
   }
 
   return (
