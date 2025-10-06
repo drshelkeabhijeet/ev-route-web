@@ -1,8 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/contexts/auth-context'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
 import { Car, Map, User, LogOut, Zap, Home, Battery } from 'lucide-react'
 import Link from 'next/link'
@@ -12,29 +11,11 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { user, loading, logout } = useAuth()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
-    }
-  }, [user, loading, router])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return null
-  }
+  const { user, logout } = useAuth()
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -132,6 +113,7 @@ export default function DashboardLayout({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
-    </div>
+      </div>
+    </ProtectedRoute>
   )
 }
