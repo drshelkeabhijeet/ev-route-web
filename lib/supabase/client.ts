@@ -11,5 +11,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      redirectTo: typeof window !== 'undefined' 
+        ? `${window.location.origin}/auth/callback`
+        : 'http://localhost:3000/auth/callback'
+    }
+  }
 )

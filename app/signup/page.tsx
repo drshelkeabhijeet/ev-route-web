@@ -45,8 +45,13 @@ export default function SignupPage() {
     try {
       await signup(email, password, name)
       toast.success('Account created successfully!')
-    } catch (error) {
-      toast.error('Failed to create account')
+    } catch (error: any) {
+      if (error.message.includes('check your email')) {
+        // Email confirmation required - redirect to success page
+        router.push('/signup/success')
+      } else {
+        toast.error(error.message || 'Failed to create account')
+      }
     } finally {
       setLoading(false)
     }

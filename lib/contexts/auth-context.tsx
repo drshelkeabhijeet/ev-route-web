@@ -123,7 +123,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(error.message)
       }
 
-      if (data.user) {
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        // Email confirmation is required - user needs to verify their email
+        throw new Error('Please check your email and click the verification link to complete your registration.')
+      }
+
+      if (data.user && data.session) {
+        // User is immediately confirmed (email confirmation disabled)
         setUser(transformSupabaseUser(data.user))
         router.push('/dashboard')
       }
