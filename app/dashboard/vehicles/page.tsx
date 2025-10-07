@@ -30,10 +30,10 @@ export default function VehiclesPage() {
     make: '',
     model: '',
     year: new Date().getFullYear(),
-    batteryCapacity: 0,
-    range: 0,
-    efficiency: 0,
-    chargingPower: 0
+    batteryCapacity: '',
+    range: '',
+    efficiency: '',
+    chargingPower: ''
   })
 
   const handleAddVehicle = () => {
@@ -42,10 +42,10 @@ export default function VehiclesPage() {
       make: '',
       model: '',
       year: new Date().getFullYear(),
-      batteryCapacity: 0,
-      range: 0,
-      efficiency: 0,
-      chargingPower: 0
+      batteryCapacity: '',
+      range: '',
+      efficiency: '',
+      chargingPower: ''
     })
     setIsDialogOpen(true)
   }
@@ -56,10 +56,10 @@ export default function VehiclesPage() {
       make: vehicle.make,
       model: vehicle.model,
       year: vehicle.year,
-      batteryCapacity: vehicle.batteryCapacity,
-      range: vehicle.range,
-      efficiency: vehicle.efficiency,
-      chargingPower: vehicle.chargingPower
+      batteryCapacity: vehicle.batteryCapacity.toString(),
+      range: vehicle.range.toString(),
+      efficiency: vehicle.efficiency.toString(),
+      chargingPower: vehicle.chargingPower.toString()
     })
     setIsDialogOpen(true)
   }
@@ -72,7 +72,13 @@ export default function VehiclesPage() {
 
     const newVehicle: Vehicle = {
       id: editingVehicle?.id || Date.now().toString(),
-      ...formData,
+      make: formData.make,
+      model: formData.model,
+      year: formData.year,
+      batteryCapacity: parseFloat(formData.batteryCapacity) || 0,
+      range: parseFloat(formData.range) || 0,
+      efficiency: parseFloat(formData.efficiency) || 0,
+      chargingPower: parseFloat(formData.chargingPower) || 0,
       isSelected: editingVehicle?.isSelected || false
     }
 
