@@ -62,7 +62,7 @@ export default function DashboardLayout({
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {user.email}
+                {user?.email || 'Loading...'}
               </span>
               <Button
                 variant="ghost"
