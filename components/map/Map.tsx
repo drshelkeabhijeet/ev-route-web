@@ -145,13 +145,24 @@ function GoogleMapComponent({
   // Update markers when stations change
   useEffect(() => {
     if (!map) return
+    
+    console.log('Map: Updating station markers, received stations:', stations.length)
+    stations.forEach((s, idx) => {
+      console.log(`Map Station ${idx + 1}:`, s.name, 'at', s.location)
+    })
 
     // Clear existing markers
     markers.forEach(marker => marker.setMap(null))
     const newMarkers: google.maps.Marker[] = []
 
     // Add station markers
-    stations.forEach((station) => {
+    stations.forEach((station, idx) => {
+      console.log(`Creating marker ${idx + 1} for ${station.name}:`, {
+        lat: station.location.lat,
+        lng: station.location.lng,
+        is_selected: station.is_selected
+      })
+      
       const isBestStation = station.is_selected || station.isSelected || station.id === selectedStationId
       
       const marker = new google.maps.Marker({
@@ -172,6 +183,8 @@ function GoogleMapComponent({
         title: station.name,
         cursor: 'pointer'
       })
+      
+      console.log(`Marker ${idx + 1} created successfully:`, marker.getPosition()?.toString())
 
       // Add click listener - only trigger callback, no info window
       marker.addListener('click', () => {
@@ -183,13 +196,35 @@ function GoogleMapComponent({
       newMarkers.push(marker)
     })
 
+    console.log(`Map: Created ${newMarkers.length} markers on the map`)
     setMarkers(newMarkers)
+    
+    // Auto-fit map bounds to show all stations if we have any
+    if (newMarkers.length > 0) {
+      const bounds = new google.maps.LatLngBounds()
+      newMarkers.forEach(marker => {
+        const position = marker.getPosition()
+        if (position) {
+          bounds.extend(position)
+        }
+      })
+      
+      // Include route points in bounds if we have a route
+      if (route && route.length > 0) {
+        route.forEach(point => {
+          bounds.extend({ lat: point.lat, lng: point.lng })
+        })
+      }
+      
+      map.fitBounds(bounds)
+      console.log('Map: Bounds adjusted to fit all stations and route')
+    }
 
     // Cleanup function
     return () => {
       newMarkers.forEach(marker => marker.setMap(null))
     }
-  }, [map, stations, onStationClick, selectedStationId])
+  }, [map, stations, onStationClick, selectedStationId, route])
 
   // Update polyline when route changes
   useEffect(() => {

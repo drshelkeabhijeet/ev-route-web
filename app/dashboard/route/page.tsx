@@ -68,7 +68,7 @@ export default function RoutePlanningPage() {
     }
   }, [])
 
-  // Fetch location suggestions using OpenStreetMap Nominatim (free, no CORS issues)
+  // Fetch location suggestions using a simple geocoding approach
   const fetchLocationSuggestions = async (query: string) => {
     if (query.length < 3) return []
     
@@ -77,8 +77,66 @@ export default function RoutePlanningPage() {
       
       console.log('Fetching suggestions for:', query)
       
-      // Use OpenStreetMap Nominatim API (free, no CORS issues)
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=in`
+      // Check if Google Maps API key is available
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      if (!apiKey) {
+        console.warn('Google Maps API key not found, using fallback geocoding service')
+        return await fetchLocationSuggestionsFallback(query)
+      }
+      
+      // Use Google Geocoding API instead of Places API (more reliable)
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.error('Google Geocoding API Error:', response.status, response.statusText)
+        console.log('Falling back to OpenStreetMap geocoding')
+        return await fetchLocationSuggestionsFallback(query)
+      }
+      
+      const data = await response.json()
+      console.log('Google Geocoding Response:', data)
+      
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        console.error('Google Geocoding API Error:', data.status, data.error_message)
+        console.log('Falling back to OpenStreetMap geocoding')
+        return await fetchLocationSuggestionsFallback(query)
+      }
+      
+      // Process geocoding results
+      const results = data.results.map((result: any) => ({
+        display_name: result.formatted_address,
+        name: result.formatted_address.split(',')[0],
+        lat: result.geometry?.location?.lat,
+        lon: result.geometry?.location?.lng,
+        place_id: result.place_id,
+        types: result.types,
+        formatted_address: result.formatted_address
+      }))
+      
+      console.log('Processed results:', results.length)
+      return results.slice(0, 5) // Limit to 5 results
+    } catch (error) {
+      console.error('Error fetching location suggestions:', error)
+      console.log('Falling back to OpenStreetMap geocoding')
+      return await fetchLocationSuggestionsFallback(query)
+    } finally {
+      setLoadingSuggestions(false)
+    }
+  }
+
+  // Fallback geocoding service using OpenStreetMap Nominatim
+  const fetchLocationSuggestionsFallback = async (query: string) => {
+    try {
+      console.log('Using fallback geocoding service for:', query)
+      
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`
       
       const response = await fetch(url, {
         method: 'GET',
@@ -89,12 +147,12 @@ export default function RoutePlanningPage() {
       })
       
       if (!response.ok) {
-        console.error('HTTP Error:', response.status, response.statusText)
-        return getMockSuggestions(query)
+        console.error('Fallback geocoding error:', response.status)
+        return []
       }
       
       const data = await response.json()
-      console.log('Nominatim Response:', data)
+      console.log('Fallback geocoding response:', data)
       
       const results = data.map((place: any) => ({
         display_name: place.display_name,
@@ -106,29 +164,12 @@ export default function RoutePlanningPage() {
         formatted_address: place.display_name
       }))
       
-      console.log('Processed results:', results.length)
+      console.log('Fallback processed results:', results.length)
       return results
     } catch (error) {
-      console.error('Error fetching location suggestions:', error)
-      return getMockSuggestions(query)
-    } finally {
-      setLoadingSuggestions(false)
+      console.error('Fallback geocoding error:', error)
+      return []
     }
-  }
-
-  // Mock suggestions as fallback
-  const getMockSuggestions = (query: string) => {
-    const mockSuggestions = [
-      { display_name: `${query}, Mumbai, Maharashtra, India`, name: query, lat: 19.0760, lon: 72.8777, place_id: 'mock1', types: ['locality'], formatted_address: `${query}, Mumbai, Maharashtra, India` },
-      { display_name: `${query}, Delhi, India`, name: query, lat: 28.7041, lon: 77.1025, place_id: 'mock2', types: ['locality'], formatted_address: `${query}, Delhi, India` },
-      { display_name: `${query}, Bangalore, Karnataka, India`, name: query, lat: 12.9716, lon: 77.5946, place_id: 'mock3', types: ['locality'], formatted_address: `${query}, Bangalore, Karnataka, India` },
-      { display_name: `${query}, Chennai, Tamil Nadu, India`, name: query, lat: 13.0827, lon: 80.2707, place_id: 'mock4', types: ['locality'], formatted_address: `${query}, Chennai, Tamil Nadu, India` },
-      { display_name: `${query}, Kolkata, West Bengal, India`, name: query, lat: 22.5726, lon: 88.3639, place_id: 'mock5', types: ['locality'], formatted_address: `${query}, Kolkata, West Bengal, India` }
-    ]
-    
-    return mockSuggestions.filter(suggestion => 
-      suggestion.display_name.toLowerCase().includes(query.toLowerCase())
-    )
   }
 
   const handleOriginChange = async (value: string) => {
@@ -187,7 +228,12 @@ export default function RoutePlanningPage() {
     }
 
     if (!originCoords || !destinationCoords) {
-      toast.error('Please select locations from the autocomplete suggestions')
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      if (!apiKey) {
+        toast.error('Google Places API key not configured. Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local')
+      } else {
+        toast.error('Please select locations from the autocomplete suggestions')
+      }
       return
     }
 
@@ -217,42 +263,8 @@ export default function RoutePlanningPage() {
       
       // Handle empty or invalid responses
       if (!response || response === '' || response === '""' || (typeof response === 'string' && response.trim() === '')) {
-        console.log('Empty response from n8n webhook - using fallback mock route')
-        toast.warning('Route planning service returned empty response. Using fallback route.')
-        
-        // Use fallback mock route
-        const mockRoute = {
-          id: 'route-1',
-          origin: { lat: 37.7749, lng: -122.4194 },
-          destination: { lat: 37.3382, lng: -121.8863 },
-          distance: 45.2,
-          duration: 3600,
-          segments: [
-            {
-              id: 'segment-1',
-              start: { lat: 37.7749, lng: -122.4194 },
-              end: { lat: 37.3382, lng: -121.8863 },
-              distance: 45.2,
-              duration: 3600,
-              chargingStops: [
-                {
-                  id: 'stop-1',
-                  station: {
-                    id: 'station-1',
-                    name: 'Tesla Supercharger',
-                    location: { lat: 37.7849, lng: -122.4094 },
-                    address: '123 Market St, San Francisco, CA',
-                    chargers: [{ type: 'Tesla Supercharger', power: 150, count: 8, available: 6 }],
-                    amenities: ['Restrooms', 'Food', 'WiFi']
-                  },
-                  duration: 1800,
-                  chargingTime: 1200
-                }
-              ]
-            }
-          ]
-        }
-        setRoute(mockRoute)
+        console.log('Empty response from n8n webhook')
+        toast.error('Route planning service returned empty response. Please try again.')
         return
       }
       
@@ -270,7 +282,7 @@ export default function RoutePlanningPage() {
         // Response wrapped in data
         routeData = response.data
       } else {
-        console.log('Unexpected response format, using fallback mock route')
+        console.log('Unexpected response format')
         throw new Error('Invalid response format from route planning API')
       }
       
@@ -291,53 +303,71 @@ export default function RoutePlanningPage() {
         
         // Add all stations from all_stations array
         if (routeData.charging_plan?.all_stations) {
-          const allStations = routeData.charging_plan.all_stations.map((station: any, index: number) => ({
-            id: station.id || `all_${index}`,
-            name: station.name || station.station_name || `Station ${index + 1}`,
-            location: {
-              lat: station.lat || station.latitude || station.location?.latitude,
-              lng: station.lng || station.longitude || station.location?.longitude
-            },
-            address: station.address || station.formatted_address || 'Address not available',
-            chargers: station.chargers || [{
-              type: 'DC Fast',
-              power: station.power || station.charging_speed_kw || 50,
-              count: station.count || station.connector_count || 1,
-              available: station.available || 1
-            }],
-            amenities: station.amenities || [],
-            is_selected: station.is_selected || false,
-            rating: station.rating || 0,
-            distance: station.distance_from_origin_km,
-            wait_time: station.time_impact_minutes,
-            charging_time: station.charging_time_minutes || station.charging_duration_minutes
-          }))
-          allStationsData = [...allStations]
+          const allStations = routeData.charging_plan.all_stations
+            .map((station: any, index: number) => {
+              const latRaw = station.lat ?? station.latitude ?? station.location?.latitude
+              const lngRaw = station.lng ?? station.longitude ?? station.lon ?? station.location?.longitude ?? station.location?.lon
+              const lat = typeof latRaw === 'string' ? parseFloat(latRaw) : latRaw
+              const lng = typeof lngRaw === 'string' ? parseFloat(lngRaw) : lngRaw
+              if (typeof lat !== 'number' || isNaN(lat) || typeof lng !== 'number' || isNaN(lng)) {
+                console.warn('Invalid coordinates for station:', station.name, { latRaw, lngRaw })
+                return null
+              }
+              return {
+                id: station.id || `all_${index}`,
+                name: station.name || station.station_name || `Station ${index + 1}`,
+                location: { lat, lng },
+                address: station.address || station.formatted_address || 'Address not available',
+                chargers: station.chargers || [{
+                  type: 'DC Fast',
+                  power: station.power || station.charging_speed_kw || 50,
+                  count: station.count || station.connector_count || 1,
+                  available: station.available || 1
+                }],
+                amenities: station.amenities || [],
+                is_selected: station.is_selected || false,
+                rating: station.rating || 0,
+                distance: station.distance_from_origin_km,
+                wait_time: station.time_impact_minutes,
+                charging_time: station.charging_time_minutes || station.charging_duration_minutes
+              }
+            })
+            .filter(Boolean)
+          allStationsData = [...(allStations as any[])]
+          console.log('Processed all stations:', allStationsData.length, allStationsData)
         }
         
         // Add selected stations with enhanced data
         if (routeData.charging_plan?.selected_stations) {
-          const selectedStations = routeData.charging_plan.selected_stations.map((station: any, index: number) => ({
-            id: station.id || `selected_${index}`,
-            name: station.name || station.station_name || `Selected Station ${index + 1}`,
-            location: {
-              lat: station.lat || station.latitude || station.location?.latitude,
-              lng: station.lng || station.longitude || station.location?.longitude
-            },
-            address: station.address || station.formatted_address || 'Address not available',
-            chargers: station.chargers || [{
-              type: 'DC Fast',
-              power: station.power || station.charging_speed_kw || 50,
-              count: station.count || station.connector_count || 1,
-              available: station.available || 1
-            }],
-            amenities: station.amenities || [],
-            is_selected: true, // These are selected stations
-            rating: station.rating || 0,
-            distance: station.distance_from_origin_km,
-            wait_time: station.time_impact_minutes,
-            charging_time: station.charging_time_minutes || station.charging_duration_minutes
-          }))
+          const selectedStations = routeData.charging_plan.selected_stations
+            .map((station: any, index: number) => {
+              const latRaw = station.lat ?? station.latitude ?? station.location?.latitude
+              const lngRaw = station.lng ?? station.longitude ?? station.lon ?? station.location?.longitude ?? station.location?.lon
+              const lat = typeof latRaw === 'string' ? parseFloat(latRaw) : latRaw
+              const lng = typeof lngRaw === 'string' ? parseFloat(lngRaw) : lngRaw
+              if (typeof lat !== 'number' || isNaN(lat) || typeof lng !== 'number' || isNaN(lng)) {
+                return null
+              }
+              return {
+                id: station.id || `selected_${index}`,
+                name: station.name || station.station_name || `Selected Station ${index + 1}`,
+                location: { lat, lng },
+                address: station.address || station.formatted_address || 'Address not available',
+                chargers: station.chargers || [{
+                  type: 'DC Fast',
+                  power: station.power || station.charging_speed_kw || 50,
+                  count: station.count || station.connector_count || 1,
+                  available: station.available || 1
+                }],
+                amenities: station.amenities || [],
+                is_selected: true, // These are selected stations
+                rating: station.rating || 0,
+                distance: station.distance_from_origin_km,
+                wait_time: station.time_impact_minutes,
+                charging_time: station.charging_time_minutes || station.charging_duration_minutes
+              }
+            })
+            .filter(Boolean) as any[]
           
           // Merge selected stations with all stations, updating existing ones
           selectedStations.forEach(selectedStation => {
@@ -356,9 +386,21 @@ export default function RoutePlanningPage() {
         }
         
         console.log(`Found ${allStationsData.length} total stations, ${allStationsData.filter(s => s.is_selected).length} selected`)
+        console.log('Final stations data:', allStationsData)
+        
+        // Debug: Log each station's coordinates
+        allStationsData.forEach((station, idx) => {
+          console.log(`Station ${idx + 1}: ${station.name}`, {
+            lat: station.location.lat,
+            lng: station.location.lng,
+            is_selected: station.is_selected
+          })
+        })
+        
+        console.log('Setting stations state with:', allStationsData.length, 'stations')
         setStations(allStationsData)
         
-        toast.success('Route planned successfully!')
+        toast.success(`Route planned successfully! Found ${allStationsData.length} charging stations.`)
       } else {
         throw new Error('No route data found in response')
       }
@@ -376,39 +418,6 @@ export default function RoutePlanningPage() {
         toast.error(`Failed to plan route: ${error.message || 'Unknown error'}`)
       }
       
-      // Fallback to mock route for development
-      const mockRoute = {
-        id: 'route-1',
-        origin: { lat: 37.7749, lng: -122.4194 },
-        destination: { lat: 37.3382, lng: -121.8863 },
-        distance: 45.2,
-        duration: 3600,
-        segments: [
-          {
-            id: 'segment-1',
-            start: { lat: 37.7749, lng: -122.4194 },
-            end: { lat: 37.3382, lng: -121.8863 },
-            distance: 45.2,
-            duration: 3600,
-            chargingStops: [
-              {
-                id: 'stop-1',
-                station: {
-                  id: 'station-1',
-                  name: 'Tesla Supercharger',
-                  location: { lat: 37.7849, lng: -122.4094 },
-                  address: '123 Market St, San Francisco, CA',
-                  chargers: [{ type: 'Tesla Supercharger', power: 150, count: 8, available: 6 }],
-                  amenities: ['Restrooms', 'Food', 'WiFi']
-                },
-                duration: 1800,
-                chargingTime: 1200
-              }
-            ]
-          }
-        ]
-      }
-      setRoute(mockRoute)
     } finally {
       setLoading(false)
     }
@@ -676,68 +685,6 @@ export default function RoutePlanningPage() {
                   {loading ? 'Planning Route...' : 'Plan Route'}
                 </Button>
                 
-                <div className="space-y-1">
-                  <Button 
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        console.log('Testing route webhook with sample data...')
-                        const response = await routeAPI.planRoute('San Francisco, CA', 'San Jose, CA', 80, 75, 20, 80, ['Restrooms', 'Food'])
-                        console.log('Test webhook response:', JSON.stringify(response, null, 2))
-                        console.log('Response type:', typeof response)
-                        console.log('Response length:', response?.length || 'N/A')
-                        toast.success('Webhook test successful! Check console for details.')
-                      } catch (error) {
-                        console.error('Webhook test failed:', error)
-                        toast.error('Webhook test failed. Check console for details.')
-                      }
-                    }}
-                    className="w-full text-xs"
-                  >
-                    🔧 Test Route Webhook
-                  </Button>
-                  
-                  <Button 
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        console.log('Testing n8n webhook directly with curl...')
-                        const response = await fetch('https://abhijeetshelke.app.n8n.cloud/webhook/5c5cf1c2-edab-404e-8637-8e3c4a572f9d', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify({
-                            battery_capacity_kwh: 75,
-                            amenity_preferences: ['Restrooms', 'Food'],
-                            origin: '37.7749,-122.4194',
-                            min_soc: 20,
-                            current_soc: 80,
-                            destination: '37.3382,-121.8863',
-                            target_soc: 80
-                          })
-                        })
-                        
-                        const text = await response.text()
-                        console.log('Direct webhook response:', text)
-                        console.log('Response status:', response.status)
-                        console.log('Response headers:', Object.fromEntries(response.headers.entries()))
-                        
-                        if (response.ok) {
-                          toast.success('Direct webhook test successful! Check console.')
-                        } else {
-                          toast.error(`Webhook returned status ${response.status}`)
-                        }
-                      } catch (error) {
-                        console.error('Direct webhook test failed:', error)
-                        toast.error('Direct webhook test failed. Check console.')
-                      }
-                    }}
-                    className="w-full text-xs"
-                  >
-                    🌐 Test Direct Webhook
-                  </Button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -878,7 +825,8 @@ export default function RoutePlanningPage() {
               )}
             </CardHeader>
             <CardContent className="p-0">
-              <Map 
+              <Map
+                key={stations.length > 0 ? JSON.stringify(stations[0].location) : 'no-stations'}
                 center={userLocation} 
                 zoom={13} 
                 className="h-[600px] w-full"

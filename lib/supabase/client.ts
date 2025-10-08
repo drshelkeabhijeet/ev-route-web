@@ -16,7 +16,11 @@ export const supabase = createClient(
     auth: {
       redirectTo: typeof window !== 'undefined' 
         ? `${window.location.origin}/auth/callback`
-        : 'http://localhost:3000/auth/callback'
+        : 'http://localhost:3000/auth/callback',
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce'
     }
   }
 )

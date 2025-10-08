@@ -10,6 +10,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithGoogle: () => Promise<void>
   signup: (email: string, password: string, name: string) => Promise<void>
   logout: () => void
 }
@@ -60,14 +61,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (session?.user) {
-          setUser(transformSupabaseUser(session.user))
-        } else {
-          setUser(null)
-          // Clear all localStorage data including cached stations
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('ev-route-cached-stations')
-            localStorage.removeItem('ev-route-has-searched')
+        console.log('Auth state change:', event, session?.user?.id)
+        
+        try {
+          if (event === 'TOKEN_REFRESHED' && session?.user) {
+            setUser(transformSupabaseUser(session.user))
+          } else if (event === 'SIGNED_IN' && session?.user) {
+            setUser(transformSupabaseUser(session.user))
+          } else if (event === 'SIGNED_OUT') {
+            setUser(null)
+            // Clear all localStorage data including cached stations
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('ev-route-cached-stations')
+              localStorage.removeItem('ev-route-has-searched')
+            }
+          }
+        } catch (error) {
+          console.error('Auth state change error:', error)
+          // If there's an error with token refresh, sign out the user
+          if (event === 'TOKEN_REFRESHED') {
+            await handleTokenRefreshError()
           }
         }
         setLoading(false)
@@ -79,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     if (!isSupabaseConfigured) {
-      throw new Error('Supabase is not configured. Please add your credentials to .env.local file. See SUPABASE_SETUP.md for instructions.')
+      throw new Error('Supabase is not configured. Please add your credentials to .env.local file.')
     }
 
     try {
@@ -89,7 +102,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       if (error) {
-        throw new Error(error.message)
+        // Provide more user-friendly error messages
+        let errorMessage = error.message
+        
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid login credentials'
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = 'Email not confirmed'
+        } else if (error.message.includes('Too many requests')) {
+          errorMessage = 'Too many requests'
+        }
+        
+        throw new Error(errorMessage)
       }
 
       if (data.user) {
@@ -98,6 +122,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Login failed:', error)
+      throw error
+    }
+  }
+
+  const loginWithGoogle = async () => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured. Please add your credentials to .env.local file.')
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      })
+
+      if (error) {
+        // Provide helpful error messages
+        if (error.message.includes('not enabled') || error.message.includes('Unsupported provider')) {
+          throw new Error('Google sign-in is not enabled. Please enable the Google provider in your Supabase project settings (Authentication > Providers > Google).')
+        }
+        throw new Error(error.message)
+      }
+    } catch (error) {
+      console.error('Google login failed:', error)
       throw error
     }
   }
@@ -159,8 +213,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Handle token refresh errors
+  const handleTokenRefreshError = async () => {
+    console.log('Token refresh failed, signing out user')
+    setUser(null)
+    
+    // Clear all localStorage data
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ev-route-cached-stations')
+      localStorage.removeItem('ev-route-has-searched')
+    }
+    
+    router.push('/login')
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, signup, logout }}>
       {children}
     </AuthContext.Provider>
   )
